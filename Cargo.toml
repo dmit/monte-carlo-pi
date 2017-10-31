@@ -1,0 +1,9 @@
+[package]
+name = "monte-carlo-pi"
+version = "0.1.0"
+authors = ["dmit"]
+
+[dependencies]
+pcg_rand  = "0.7"
+rand  = "0.3"
+rayon = "0.8"
