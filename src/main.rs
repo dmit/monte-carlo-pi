@@ -2,6 +2,7 @@ extern crate pcg_rand;
 extern crate rand;
 extern crate rayon;
 
+use pcg_rand::seeds::PcgSeeder;
 use pcg_rand::Pcg32;
 use rand::{Rng, SeedableRng};
 use rayon::prelude::*;
@@ -20,13 +21,17 @@ fn main() {
 }
 
 fn run(n: u64) -> u64 {
-    let seed: [u64; 2] = rand::thread_rng().gen();
-    let mut rng: Pcg32 = SeedableRng::from_seed(seed);
+    let seeder = {
+        let seed: u64 = rand::thread_rng().gen();
+        let seq: u64 = rand::thread_rng().gen();
+        PcgSeeder::seed_with_stream(seed, seq)
+    };
+    let mut rng: Pcg32 = SeedableRng::from_seed(seeder);
 
     let mut cnt = 0u64;
     for _ in 0..n {
-        let x = rng.next_f32();
-        let y = rng.next_f32();
+        let x: f32 = rng.gen();
+        let y: f32 = rng.gen();
         if (x * x + y * y).sqrt() <= 1.0 {
             cnt += 1;
         }
@@ -44,20 +49,23 @@ fn run_par(n: u64) -> u64 {
             RNG.with(|cell| {
                 let mut local_store = cell.borrow_mut();
                 if local_store.is_none() {
-                    let seed: [u64; 2] = rand::thread_rng().gen();
-                    let rng: Pcg32 = SeedableRng::from_seed(seed);
+                    let seeder = {
+                        let seed: u64 = rand::thread_rng().gen();
+                        let seq: u64 = rand::thread_rng().gen();
+                        PcgSeeder::seed_with_stream(seed, seq)
+                    };
+                    let rng: Pcg32 = SeedableRng::from_seed(seeder);
                     *local_store = Some(rng);
                 }
 
                 let rng = local_store.as_mut().unwrap();
-                let x = rng.next_f32();
-                let y = rng.next_f32();
+                let x: f32 = rng.gen();
+                let y: f32 = rng.gen();
                 if (x * x + y * y).sqrt() <= 1.0 {
                     1
                 } else {
                     0
                 }
             })
-        })
-        .sum()
+        }).sum()
 }
