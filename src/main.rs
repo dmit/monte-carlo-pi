@@ -1,3 +1,5 @@
+#![feature(duration_float)]
+
 extern crate pcg_rand;
 extern crate rand;
 extern crate rayon;
@@ -7,6 +9,7 @@ use pcg_rand::Pcg32;
 use rand::{Rng, SeedableRng};
 use rayon::prelude::*;
 use std::env;
+use std::time::Instant;
 
 fn main() {
     let n = env::args()
@@ -15,9 +18,21 @@ fn main() {
         .parse::<u64>()
         .expect("invalid number of iterations");
     let parallel = env::args().nth(2).is_some();
+
+    let start = Instant::now();
     let res = if parallel { run_par(n) } else { run(n) };
+    let duration = start.elapsed();
+
     let pi = (res as f64 / n as f64) * 4.0;
-    println!("Total: {}\nInside: {}\nπ: {}", n, res, pi);
+    println!(
+        "Total: {}\nInside: {}\nπ: {}\nTime elapsed: {}.{:0<3}s\nIterations/s: {:.3}M",
+        n,
+        res,
+        pi,
+        duration.as_secs(),
+        duration.subsec_millis(),
+        n as f64 / duration.as_float_secs() / 1_000_000.0,
+    );
 }
 
 fn run(n: u64) -> u64 {
@@ -67,5 +82,6 @@ fn run_par(n: u64) -> u64 {
                     0
                 }
             })
-        }).sum()
+        })
+        .sum()
 }
