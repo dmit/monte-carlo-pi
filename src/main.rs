@@ -1,15 +1,12 @@
 #![feature(duration_float)]
 
-extern crate pcg_rand;
-extern crate rand;
-extern crate rayon;
-
-use pcg_rand::seeds::PcgSeeder;
-use pcg_rand::Pcg32;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use rayon::prelude::*;
 use std::env;
 use std::time::Instant;
+use xoshiro::Xoshiro256Plus;
+
+type Precision = f32;
 
 fn main() {
     let n = env::args()
@@ -36,17 +33,12 @@ fn main() {
 }
 
 fn run(n: u64) -> u64 {
-    let seeder = {
-        let seed: u64 = rand::thread_rng().gen();
-        let seq: u64 = rand::thread_rng().gen();
-        PcgSeeder::seed_with_stream(seed, seq)
-    };
-    let mut rng: Pcg32 = SeedableRng::from_seed(seeder);
+    let mut rng = Xoshiro256Plus::from_seed_u64(rand::thread_rng().gen());
 
     let mut cnt = 0u64;
     for _ in 0..n {
-        let x: f32 = rng.gen();
-        let y: f32 = rng.gen();
+        let x: Precision = rng.gen();
+        let y: Precision = rng.gen();
         if (x * x + y * y).sqrt() <= 1.0 {
             cnt += 1;
         }
@@ -56,7 +48,7 @@ fn run(n: u64) -> u64 {
 
 fn run_par(n: u64) -> u64 {
     use std::cell::RefCell;
-    thread_local!(static RNG: RefCell<Option<Pcg32>> = RefCell::new(None));
+    thread_local!(static RNG: RefCell<Option<Xoshiro256Plus>> = RefCell::new(None));
 
     (0..n)
         .into_par_iter()
@@ -64,18 +56,13 @@ fn run_par(n: u64) -> u64 {
             RNG.with(|cell| {
                 let mut local_store = cell.borrow_mut();
                 if local_store.is_none() {
-                    let seeder = {
-                        let seed: u64 = rand::thread_rng().gen();
-                        let seq: u64 = rand::thread_rng().gen();
-                        PcgSeeder::seed_with_stream(seed, seq)
-                    };
-                    let rng: Pcg32 = SeedableRng::from_seed(seeder);
+                    let rng = Xoshiro256Plus::from_seed_u64(rand::thread_rng().gen());
                     *local_store = Some(rng);
                 }
 
                 let rng = local_store.as_mut().unwrap();
-                let x: f32 = rng.gen();
-                let y: f32 = rng.gen();
+                let x: Precision = rng.gen();
+                let y: Precision = rng.gen();
                 if (x * x + y * y).sqrt() <= 1.0 {
                     1
                 } else {
