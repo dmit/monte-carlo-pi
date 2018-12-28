@@ -5,7 +5,14 @@ Build:
 
 Run:
   $ # Single-threaded
-  $ ./target/release/monte-carlo-pi 10000000
+  $
+  $ cargo run --release <number of iterations>
 
   $ # Parallel
-  $ ./target/release/monte-carlo-pi 10000000 par
+  $ #
+  $ # This mode can perform multiple iterations per unit of work (chunk). In
+  $ # order to optimize overall efficiency the chunk size should be big enough
+  $ # so that time to process a single chunk significantly outweighs the
+  $ # parallelization overhead.
+  $
+  $ cargo run --release <number of iterations> <chunk size>
