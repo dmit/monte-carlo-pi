@@ -1,10 +1,8 @@
-#![feature(duration_float)]
+use std::{env, time::Instant};
 
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand_xoshiro::Xoshiro256StarStar;
 use rayon::prelude::*;
-use std::env;
-use std::time::Instant;
-use xoshiro::Xoshiro256Plus;
 
 type Precision = f32;
 
@@ -14,9 +12,8 @@ fn main() {
         .expect("number of iterations not specified")
         .parse::<u64>()
         .expect("invalid number of iterations");
-    let parallel = env::args()
-        .nth(2)
-        .map(|n| n.parse::<u64>().unwrap_or(1000).min(total_iterations));
+    let parallel =
+        env::args().nth(2).map(|n| n.parse::<u64>().unwrap_or(1000).min(total_iterations));
 
     println!(
         "Parallel: {}\nTotal: {}",
@@ -37,7 +34,7 @@ fn main() {
     let duration = start.elapsed();
 
     let pi = (res as f64 / total_iterations as f64) * 4.0;
-    let iterations_per_s = total_iterations as f64 / duration.as_float_secs();
+    let iterations_per_s = total_iterations as f64 / duration.as_secs_f64();
     println!(
         "Inside: {}\nπ: {}\nTime elapsed: {}.{:0<3}s\nIterations/s: {:.3}M",
         res,
@@ -49,7 +46,7 @@ fn main() {
 }
 
 fn run(n: u64) -> u64 {
-    let mut rng = Xoshiro256Plus::from_seed_u64(rand::thread_rng().gen());
+    let mut rng = Xoshiro256StarStar::seed_from_u64(rand::thread_rng().gen());
 
     let mut cnt = 0u64;
     for _ in 0..n {
@@ -64,13 +61,10 @@ fn run(n: u64) -> u64 {
 
 fn run_par(n: u64, chunk_size: u64) -> u64 {
     use std::cell::RefCell;
-    thread_local!(static RNG: RefCell<Option<Xoshiro256Plus>> = RefCell::new(None));
+    thread_local!(static RNG: RefCell<Option<Xoshiro256StarStar>> = RefCell::new(None));
 
-    let (chunk, num_chunks) = if chunk_size < n {
-        (0..chunk_size, (n / chunk_size) as usize)
-    } else {
-        (0..n, 1)
-    };
+    let (chunk, num_chunks) =
+        if chunk_size < n { (0..chunk_size, (n / chunk_size) as usize) } else { (0..n, 1) };
 
     rayon::iter::repeatn(chunk, num_chunks)
         .take(num_chunks)
@@ -78,7 +72,7 @@ fn run_par(n: u64, chunk_size: u64) -> u64 {
             RNG.with(|cell| {
                 let mut local_store = cell.borrow_mut();
                 if local_store.is_none() {
-                    let rng = Xoshiro256Plus::from_seed_u64(rand::thread_rng().gen());
+                    let rng = Xoshiro256StarStar::seed_from_u64(rand::thread_rng().gen());
                     *local_store = Some(rng);
                 }
 
@@ -87,11 +81,7 @@ fn run_par(n: u64, chunk_size: u64) -> u64 {
                 chunk.fold(0u64, |acc, _| {
                     let x: Precision = rng.gen();
                     let y: Precision = rng.gen();
-                    if (x * x + y * y).sqrt() <= 1.0 {
-                        acc + 1
-                    } else {
-                        acc
-                    }
+                    if (x * x + y * y).sqrt() <= 1.0 { acc + 1 } else { acc }
                 })
             })
         })
