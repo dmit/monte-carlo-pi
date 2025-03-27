@@ -1,40 +1,47 @@
-use std::{env, time::Instant};
+use std::time::Instant;
 
+use argh::FromArgs;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256StarStar;
 use rayon::prelude::*;
 
 type Precision = f32;
 
+/// estimate Pi using the Monte Carlo method
+#[derive(FromArgs)]
+struct Opts {
+    /// total number of iterations
+    #[argh(option, short = 'n')]
+    iterations: u64,
+
+    /// run in parallel with specified number of iterations per work unit
+    #[argh(option, short = 'p')]
+    parallel_chunk_size: Option<u64>,
+}
+
 fn main() {
-    let total_iterations = env::args()
-        .nth(1)
-        .expect("number of iterations not specified")
-        .parse::<u64>()
-        .expect("invalid number of iterations");
-    let parallel =
-        env::args().nth(2).map(|n| n.parse::<u64>().unwrap_or(1000).min(total_iterations));
+    let opts: Opts = argh::from_env();
 
     println!(
         "Parallel: {}\nTotal: {}",
-        if let Some(chunk_size) = parallel {
+        if let Some(chunk_size) = opts.parallel_chunk_size {
             format!("yes ({} per chunk)", chunk_size)
         } else {
             "no".to_string()
         },
-        total_iterations
+        opts.iterations
     );
 
     let start = Instant::now();
-    let res = if let Some(chunk_size) = parallel {
-        run_par(total_iterations, chunk_size)
+    let res = if let Some(chunk_size) = opts.parallel_chunk_size {
+        run_par(opts.iterations, chunk_size)
     } else {
-        run(total_iterations)
+        run(opts.iterations)
     };
     let duration = start.elapsed();
 
-    let pi = (res as f64 / total_iterations as f64) * 4.0;
-    let iterations_per_s = total_iterations as f64 / duration.as_secs_f64();
+    let pi = (res as f64 / opts.iterations as f64) * 4.0;
+    let iterations_per_s = opts.iterations as f64 / duration.as_secs_f64();
     println!(
         "Inside: {}\nπ: {}\nTime elapsed: {}.{:0<3}s\nIterations/s: {:.3}M",
         res,
@@ -46,12 +53,12 @@ fn main() {
 }
 
 fn run(n: u64) -> u64 {
-    let mut rng = Xoshiro256StarStar::seed_from_u64(rand::thread_rng().gen());
+    let mut rng = Xoshiro256StarStar::seed_from_u64(rand::random());
 
     let mut cnt = 0u64;
     for _ in 0..n {
-        let x: Precision = rng.gen();
-        let y: Precision = rng.gen();
+        let x: Precision = rng.random();
+        let y: Precision = rng.random();
         if (x * x + y * y).sqrt() <= 1.0 {
             cnt += 1;
         }
@@ -61,7 +68,7 @@ fn run(n: u64) -> u64 {
 
 fn run_par(n: u64, chunk_size: u64) -> u64 {
     use std::cell::RefCell;
-    thread_local!(static RNG: RefCell<Option<Xoshiro256StarStar>> = RefCell::new(None));
+    thread_local!(static RNG: RefCell<Option<Xoshiro256StarStar>> = const { RefCell::new(None) });
 
     let (chunk, num_chunks) =
         if chunk_size < n { (0..chunk_size, (n / chunk_size) as usize) } else { (0..n, 1) };
@@ -72,15 +79,15 @@ fn run_par(n: u64, chunk_size: u64) -> u64 {
             RNG.with(|cell| {
                 let mut local_store = cell.borrow_mut();
                 if local_store.is_none() {
-                    let rng = Xoshiro256StarStar::seed_from_u64(rand::thread_rng().gen());
+                    let rng = Xoshiro256StarStar::seed_from_u64(rand::random());
                     *local_store = Some(rng);
                 }
 
                 let rng = local_store.as_mut().unwrap();
 
                 chunk.fold(0u64, |acc, _| {
-                    let x: Precision = rng.gen();
-                    let y: Precision = rng.gen();
+                    let x: Precision = rng.random();
+                    let y: Precision = rng.random();
                     if (x * x + y * y).sqrt() <= 1.0 { acc + 1 } else { acc }
                 })
             })
